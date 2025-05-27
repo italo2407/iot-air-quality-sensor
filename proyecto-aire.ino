@@ -76,9 +76,8 @@ void conectaMQTT() {
     // Attempt to connect and set the Last Will Message (LWM) in the topic sensor/conexion/status
     // The LWM will be sent if the device disconnects unexpectedly
     String mensaje = getConexionStatus("OFF");
-    mqtt_client.setWill(topic_PUB_conexion.c_str(), mensaje.c_str(), true, 1);
     
-    if (mqtt_client.connect(DEVICE_ID.c_str())){
+    if (mqtt_client.connect(DEVICE_ID.c_str(), NULL, NULL, topic_PUB_conexion.c_str(), 0, true, mensaje.c_str())){
       Serial.println(DEVICE_ID + " conectado a MQTT Broker!");
 
       // Publish a connection message
