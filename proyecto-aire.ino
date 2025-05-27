@@ -8,12 +8,12 @@
 
 // Pines de sensores
 #define DHTPIN 4
-#define MQ135_PIN 25
+#define MQ135_PIN 32
 #define LED_PIN 5         // LED fijo (indicador)
 #define RELAY_PIN 19        // Pin del relé para el ventilador
 
 // Umbrales
-#define TEMP_UMBRAL 25.10    // Temperatura en °C
+#define TEMP_UMBRAL 28    // Temperatura en °C
 #define MQ135_UMBRAL 300    // Valor crudo MQ135
 
 // definimos macro para indicar función y línea de código en los mensajes
@@ -27,8 +27,8 @@ WiFiClient wClient;
 PubSubClient mqtt_client(wClient);
 
 // WiFi credentials
-const String ssid = "";
-const String password = "";
+const String ssid = "DIGIFIBRA-Akuf";
+const String password = "fTKuDzCfTTFU";
 
 // MQTT credentials and server
 const String mqtt_server = "35.195.41.101";
@@ -139,8 +139,18 @@ void procesaMensaje(char* topic, byte* payload, unsigned int length) {
     return;
   }
   
-  String status = jsonDocument["command"];
-  bool encendidoHigh = (status == "ON");
+  String dataStr = jsonDocument["data"];
+  JsonDocument dataDoc;
+  error = deserializeJson(dataDoc, dataStr);
+  if (error) {
+    Serial.print("JSON deserialization (data) failed: ");
+    Serial.println(error.f_str());
+    return;
+  }
+
+  String status = dataDoc["command"];
+  Serial.println(status);
+  bool encendidoHigh = (status=="ON");
 
   if(String(topic) == topic_SUB_fan) {
     if(encendidoHigh) {
@@ -176,7 +186,7 @@ void publishActuatorStatus(bool status, String type) {
   time_t now;
   time(&now);
 
-  doc["device_id"] = PLACA_ID;
+  doc["device_id"] = DEVICE_ID;
   doc["actuator_type"] = type;
   doc["status"] = status;
   doc["timestamp"] = now;
@@ -202,7 +212,7 @@ void setup() {
 
   // Asegurar que están apagados al iniciar
   digitalWrite(LED_PIN, LOW);
-  digitalWrite(RELAY_PIN, LOW);
+  digitalWrite(RELAY_PIN, HIGH);
 
   conectaWifi();
 
@@ -223,6 +233,7 @@ void setup() {
 }
 
 void loop() {
+  mqtt_client.loop();
   delay(2000);  // Espera entre lecturas
 
   float h = dht.readHumidity();
@@ -234,7 +245,7 @@ void loop() {
   }
 
   int gasRaw = analogRead(MQ135_PIN);
-  int ppm = map(gasRaw, 200, 3000, 0, 1000);
+  int ppm = map(gasRaw, 0, 3000, 0, 1000);
   float gasPercent = (gasRaw / 4095.0) * 100.0;
   String calidadTexto = interpretarCalidad(ppm);
 
