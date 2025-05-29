@@ -13,8 +13,8 @@
 #define RELAY_PIN 19        // Pin del relé para el ventilador
 
 // Umbrales
-#define TEMP_UMBRAL 28    // Temperatura en °C
-#define MQ135_UMBRAL 300    // Valor crudo MQ135
+// #define TEMP_UMBRAL 28    // Temperatura en °C
+// #define MQ135_UMBRAL 300    // Valor crudo MQ135
 
 // definimos macro para indicar función y línea de código en los mensajes
 #define DEBUG_STRING "["+String(__FUNCTION__)+"():"+String(__LINE__)+"]   "
@@ -45,6 +45,7 @@ String topic_PUB_actuator_status = "sensor/actuator/status";
 // MQTT Sub topics
 String topic_SUB_fan = "sensor/"+ DEVICE_ID + "/actuator/fan/cmd";
 String topic_SUB_light = "sensor/"+ DEVICE_ID + "/actuator/light/cmd";
+String topic_SUB_config = "sensor/" + DEVICE_ID + "/config";
 
 // Función para interpretar calidad del aire (MQ135)
 String interpretarCalidad(int valor) {
@@ -86,6 +87,7 @@ void conectaMQTT() {
       // Topic subscriptions
       mqtt_client.subscribe(topic_SUB_fan.c_str());
       mqtt_client.subscribe(topic_SUB_light.c_str());
+      mqtt_client.subscribe(topic_SUB_config.c_str());
     } else {
       // Wait 5 seconds before retrying
       Serial.print("ERROR: ");
@@ -148,11 +150,12 @@ void procesaMensaje(char* topic, byte* payload, unsigned int length) {
     return;
   }
 
-  String status = dataDoc["command"];
-  Serial.println(status);
-  bool encendidoHigh = (status=="ON");
 
   if(String(topic) == topic_SUB_fan) {
+    String status = dataDoc["command"];
+    Serial.println(status);
+    bool encendidoHigh = (status=="ON");
+
     if(encendidoHigh) {
       Serial.println(DEBUG_STRING+"Encendiendo ventilador");
       digitalWrite(RELAY_PIN, LOW);  // Enciende el ventilador
@@ -166,6 +169,10 @@ void procesaMensaje(char* topic, byte* payload, unsigned int length) {
   }
 
   if(String(topic) == topic_SUB_light) {
+    String status = dataDoc["command"];
+    Serial.println(status);
+    bool encendidoHigh = (status=="ON");
+
     if(encendidoHigh) {
       Serial.println(DEBUG_STRING+"Encendiendo Led");
       digitalWrite(LED_PIN, HIGH); // Enciende el led
@@ -176,6 +183,19 @@ void procesaMensaje(char* topic, byte* payload, unsigned int length) {
 
     // Publish the confirmation that the ACTUATOR status is changed
     publishActuatorStatus(encendidoHigh, "light"); 
+  }
+
+  if(String(topic) == topic_SUB_config) {
+    Serial.println(DEBUG_STRING+"Configurando parámetros del sensor...");
+    unsigned long data_sending_interval = dataDoc["data_sending_interval"];
+    unsigned long check_threshold_interval = dataDoc["check_threshold_interval"];
+    int temp_threshold_max = dataDoc["temp_threshold_max"];
+    int ppm_threshold_max = dataDoc["ppm_threshold_max"];
+    
+    TEMP_UMBRAL = temp_threshold_max;
+    MQ135_UMBRAL = ppm_threshold_max;
+    intervaloChequeo = check_threshold_interval; // Convertir a milisegundos
+    intervaloLoop = data_sending_interval; // Convertir a milisegundos
   }
 }
 
@@ -232,9 +252,15 @@ void setup() {
   Serial.println("Sistema de monitoreo ambiental iniciado");
 }
 
+int TEMP_UMBRAL = 28;    // Temperatura en °C
+int MQ135_UMBRAL = 300;  // Valor crudo MQ135
+
+unsigned long ultimoChequeo = 0;
+unsigned long intervaloChequeo = 120000; // 2 minutos en milisegundos
+unsigned long intervaloLoop = 2000; // Intervalo de loop en milisegundos
+
 void loop() {
   mqtt_client.loop();
-  delay(2000);  // Espera entre lecturas
 
   float h = dht.readHumidity();
   float t = dht.readTemperature();
@@ -288,17 +314,24 @@ void loop() {
   mqtt_client.publish(topic_PUB_datos.c_str(), mensajeDatos.c_str());
 
   // Activar relé y LED si se supera algún umbral
-  if (t > TEMP_UMBRAL || gasRaw > MQ135_UMBRAL) {
-    digitalWrite(RELAY_PIN, LOW);   // Enciende ventilador
-    digitalWrite(LED_PIN, HIGH);     // Enciende LED
-    Serial.println("Ventilador activado");
-    publishActuatorStatus(true, "fan"); // Publica estado del ventilador
-    publishActuatorStatus(true, "light"); // Publica estado del LED
-  } else {
-    digitalWrite(RELAY_PIN, HIGH);    // Apaga ventilador
-    digitalWrite(LED_PIN, LOW);      // Apaga LED
-    Serial.println("Condiciones normales");
-    publishActuatorStatus(false, "fan"); // Publica estado del ventilador
-    publishActuatorStatus(false, "light"); // Publica estado del LED
+  // Validar umbrales cada 2 minutos
+  if (millis() - ultimoChequeo >= intervaloChequeo) {
+    ultimoChequeo = millis();
+    Serial.println(DEBUG_STRING+"Chequeando condiciones ambientales...");
+    if (t > TEMP_UMBRAL || gasRaw > MQ135_UMBRAL) {
+      digitalWrite(RELAY_PIN, LOW);   // Enciende ventilador
+      digitalWrite(LED_PIN, HIGH);     // Enciende LED
+      Serial.println("Ventilador activado");
+      publishActuatorStatus(true, "fan"); // Publica estado del ventilador
+      publishActuatorStatus(true, "light"); // Publica estado del LED
+    } else {
+      digitalWrite(RELAY_PIN, HIGH);    // Apaga ventilador
+      digitalWrite(LED_PIN, LOW);      // Apaga LED
+      Serial.println("Condiciones normales");
+      publishActuatorStatus(false, "fan"); // Publica estado del ventilador
+      publishActuatorStatus(false, "light"); // Publica estado del LED
+    } 
   }
+
+  delay(intervaloLoop);
 }
