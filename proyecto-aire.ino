@@ -12,9 +12,14 @@
 #define LED_PIN 5         // LED fijo (indicador)
 #define RELAY_PIN 19        // Pin del relé para el ventilador
 
-// Umbrales
-// #define TEMP_UMBRAL 28    // Temperatura en °C
-// #define MQ135_UMBRAL 300    // Valor crudo MQ135
+
+int TEMP_UMBRAL = 35;    // Temperatura en °C
+int MQ135_UMBRAL = 300;  // Valor crudo MQ135
+
+unsigned long ultimoChequeo = 0;
+unsigned long intervaloChequeo = 15000; // 2 minutos en milisegundos
+unsigned long intervaloLoop = 2000; // Intervalo de loop en milisegundos
+
 
 // definimos macro para indicar función y línea de código en los mensajes
 #define DEBUG_STRING "["+String(__FUNCTION__)+"():"+String(__LINE__)+"]   "
@@ -27,8 +32,8 @@ WiFiClient wClient;
 PubSubClient mqtt_client(wClient);
 
 // WiFi credentials
-const String ssid = "DIGIFIBRA-Akuf";
-const String password = "fTKuDzCfTTFU";
+const String ssid = "";
+const String password = "";
 
 // MQTT credentials and server
 const String mqtt_server = "35.195.41.101";
@@ -252,12 +257,6 @@ void setup() {
   Serial.println("Sistema de monitoreo ambiental iniciado");
 }
 
-int TEMP_UMBRAL = 28;    // Temperatura en °C
-int MQ135_UMBRAL = 300;  // Valor crudo MQ135
-
-unsigned long ultimoChequeo = 0;
-unsigned long intervaloChequeo = 120000; // 2 minutos en milisegundos
-unsigned long intervaloLoop = 2000; // Intervalo de loop en milisegundos
 
 void loop() {
   mqtt_client.loop();
